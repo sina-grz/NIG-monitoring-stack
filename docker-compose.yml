@@ -1,0 +1,66 @@
+version: "3"
+services:
+  netdata:
+    build:
+      context: netdatas/
+    volumes:
+      - netdata:/etc/netdata/
+      - apache-log:/var/log/apache2/
+      - netdatalib:/var/lib/netdata
+      - netdatacache:/var/cache/netdata
+      - /etc/passwd:/host/etc/passwd:ro
+      - /etc/group:/host/etc/group:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /etc/os-release:/host/etc/os-release:ro
+    ports:
+      - 19999:19999
+    restart: unless-stopped
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - apparmor:unconfined
+    environment:
+      - DOCKER_USR=root
+    depends_on: 
+      - db
+  
+  db:
+    build: 
+      context: influxdb
+    volumes:
+       - datasource:/var/lib/influxdb/
+    
+  netdata-configurator:
+     build:
+      context: netdata-configurator-m/
+     volumes:
+       - netdata:/etc/netdata/
+     depends_on:
+       - netdata
+     command: ["conf","--host=db","--path=/var/log/apache2/access.log"] #enter path of nginx or apache log
+        
+  netdata-telegram-bot:
+    build:
+      context: netdata-telegram-bot/
+    depends_on:
+      - netdata
+    environment:
+      - HTTP_PROXY=****
+    secrets:
+      - token
+            
+  grafana:
+    image: grafana/grafana
+    ports:
+       - 3000:3000
+# be sure to mount data file , which is going to shared between component
+volumes:
+  datasource:
+  netdata:
+  netdatacache:
+  netdatalib:
+
+secrets:
+  token:
+   external: true
